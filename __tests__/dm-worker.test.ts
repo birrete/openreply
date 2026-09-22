@@ -137,6 +137,7 @@ vi.mock("bullmq", () => {
 });
 
 import { createDMWorker } from "../lib/queue/dm-worker";
+import { MetaApiError } from "@/lib/meta/client";
 
 const usagePeriodStart = new Date("2026-05-01T00:00:00.000Z");
 
@@ -1241,6 +1242,33 @@ it('never automatically resends a private reply with an unconfirmed delivery', a
   expect(mockSendPrivateReply).not.toHaveBeenCalled();
   expect(mockSendPrivateReplyWithButton).not.toHaveBeenCalled();
   expect(mockPrisma.dmLog.update).not.toHaveBeenCalled();
+});
+
+it('treats a Meta code-1 send failure as delivery-unconfirmed instead of a plain retry', async () => {
+  // Meta answers /messages with the generic code 1 OAuthException *after* the
+  // DM has already reached the recipient (see PR #70 upstream). BullMQ must
+  // not retry this — a retry sends the same person another copy of the DM —
+  // and the comment reconciler must see it as handled so it stops re-queuing.
+  mockSendPrivateReply.mockRejectedValue(
+    new MetaApiError(1, undefined, undefined, "An unknown error has occurred")
+  );
+  const processor = getProcessor();
+
+  await expect(processor(createMockJob())).rejects.toMatchObject({
+    name: "UnrecoverableError",
+  });
+
+  expect(mockPrisma.dmLog.update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({
+        status: "FAILED",
+        dmDeliveryUnconfirmed: true,
+      }),
+    })
+  );
+  // The rate slot was reserved before the send failed, so it must be handed
+  // back rather than burned for the rest of its TTL.
+  expect(mockReleaseDMSlot).toHaveBeenCalledWith("ig_456");
 });
 
 it('keeps an unconfirmed public reply untouched after the DM was delivered', async () => {
