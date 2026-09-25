@@ -847,25 +847,25 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
     return;
   }
 
-  // Duplicate sends are enabled: every button tap re-sends the reveal
-  // instead of only firing once per person.
+  // One reveal per user per automation. Without this, a second real tap, a
+  // re-delivered postback webhook (each redelivery carries its own `mid`, so
+  // the operationId claim below treats it as a new send), or the read
+  // fallback would all re-send the link.
   const dedupeId = `reveal:${userId}`;
 
-  if (fallback) {
-    const existingReveal = await prisma.dmLog.findUnique({
-      where: {
-        automationId_commentId: {
-          automationId: automation.id,
-          commentId: dedupeId,
-        },
+  const existingReveal = await prisma.dmLog.findUnique({
+    where: {
+      automationId_commentId: {
+        automationId: automation.id,
+        commentId: dedupeId,
       },
-    });
-    if (
-      existingReveal?.status === "SENT" ||
-      existingReveal?.dmDeliveryUnconfirmed
-    )
-      return;
-  }
+    },
+  });
+  if (
+    existingReveal?.status === "SENT" ||
+    existingReveal?.dmDeliveryUnconfirmed
+  )
+    return;
 
   // Personalize {username} from the opening DM log for this user, if present.
   const openingLog = await prisma.dmLog.findFirst({

@@ -732,6 +732,34 @@ describe("DM Worker — Full Pipeline", () => {
     );
   });
 
+  it("should not resend the reveal for a real second button tap once it already sent", async () => {
+    // Regression: a prior version only checked for an existing reveal on the
+    // read-fallback path, so a re-delivered postback webhook or a second real
+    // tap always re-sent the link (see the "campaña test" duplicate-coupon-DM
+    // report — the same reveal went out twice for one tap).
+    mockPrisma.automation.findMany.mockResolvedValue([]);
+    mockPrisma.automation.findFirst.mockResolvedValue({
+      ...mockAutomation,
+      trackedLinks: [],
+    });
+    mockPrisma.dmLog.findUnique.mockResolvedValue({
+      id: "existing_reveal",
+      status: "SENT",
+    });
+
+    const processor = getProcessor();
+    await processor(
+      createMockPostbackJob({
+        instagramAccountId: "ig_456",
+        userId: "commenter_999",
+        payload: "reveal:auto_789",
+      })
+    );
+
+    expect(mockSendDirectMessage).not.toHaveBeenCalled();
+    expect(mockReserveWorkspaceDMSend).not.toHaveBeenCalled();
+  });
+
   it("should not deliver a read fallback when the button tap already sent the reveal", async () => {
     mockPrisma.automation.findMany.mockResolvedValue([]);
     mockPrisma.automation.findFirst.mockResolvedValue({
