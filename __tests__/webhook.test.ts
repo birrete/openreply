@@ -378,6 +378,30 @@ describe("parseMessageEvents", () => {
     ]);
   });
 
+  it("should capture the story id from a reply to one of the account's Stories", () => {
+    const payload = messagingPayload([
+      {
+        sender: { id: "user_999" },
+        recipient: { id: "ig_456" },
+        message: {
+          mid: "mid_abc",
+          text: "quiero",
+          reply_to: { story: { id: "story_777", url: "https://cdn/story.jpg" } },
+        },
+      },
+    ]);
+
+    expect(parseMessageEvents(payload)).toEqual([
+      {
+        instagramAccountId: "ig_456",
+        messageId: "mid_abc",
+        messageText: "quiero",
+        senderId: "user_999",
+        storyId: "story_777",
+      },
+    ]);
+  });
+
   it("should ignore echoes of the account's own messages", () => {
     const payload = messagingPayload([
       {

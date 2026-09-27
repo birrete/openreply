@@ -61,13 +61,15 @@ export interface ProcessFollowUpJob {
 }
 
 // An inbound DM from a user. Campaigns with `dmTriggerEnabled` whose keywords
-// match the text reply to the sender.
+// match the text reply to the sender. When `storyId` is set, the message is a
+// reply to a Story instead — routed to `storyReplyTriggerEnabled` campaigns.
 export interface ProcessMessageJob {
   accountConnectionId?: string;
   instagramAccountId: string;
   messageId: string;
   messageText: string;
   senderId: string;
+  storyId?: string;
 }
 
 export type DmQueueJob =

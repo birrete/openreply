@@ -185,6 +185,11 @@ model Automation {
   // keywords above. Independent of the post trigger — a DM has no media, so
   // postId / matchAnyPost do not apply to it.
   dmTriggerEnabled Boolean @default(false)
+  // Also fire this campaign when someone replies to any of the account's
+  // Instagram Stories, matched against the same keywords/matchAnyWord as the
+  // DM trigger. Independent of both other triggers — a story reply is its
+  // own event, not a post comment or a plain DM.
+  storyReplyTriggerEnabled Boolean @default(false)
   dmMessage      String
   openingDmEnabled     Boolean @default(false)
   openingDmMessage     String?

@@ -25,7 +25,7 @@ import {
   type ImportRow,
 } from "@/lib/import-queue";
 
-type TriggerScope = "specific" | "any" | "next";
+type TriggerScope = "specific" | "any" | "next" | "storyOnly";
 type MatchMode = "specific" | "any";
 
 interface LoadedCampaign {
@@ -38,6 +38,7 @@ interface LoadedCampaign {
   keywords: string[];
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
+  storyReplyTriggerEnabled: boolean;
   dmMessage: string;
   openingDmEnabled: boolean;
   openingDmMessage: string | null;
@@ -160,6 +161,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [matchMode, setMatchMode] = useState<MatchMode>("specific");
   const [keywordText, setKeywordText] = useState("");
   const [dmTriggerEnabled, setDmTriggerEnabled] = useState(false);
+  const [storyReplyTriggerEnabled, setStoryReplyTriggerEnabled] = useState(false);
 
   const [publicReplyEnabled, setPublicReplyEnabled] = useState(false);
   const [publicReplyMessages, setPublicReplyMessages] = useState<string[]>([""]);
@@ -254,13 +256,20 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setName(c.name);
         setSelectedAccountId(c.instagramAccountId);
         setTriggerScope(
-          c.matchAnyPost ? "any" : c.pendingNextReel ? "next" : "specific"
+          c.matchAnyPost
+            ? "any"
+            : c.pendingNextReel
+              ? "next"
+              : !c.postId && c.storyReplyTriggerEnabled
+                ? "storyOnly"
+                : "specific"
         );
         setPostId(c.postId);
         setPostUrl(c.postUrl);
         setMatchMode(c.matchAnyWord ? "any" : "specific");
         setKeywordText(c.keywords.join(", "));
         setDmTriggerEnabled(c.dmTriggerEnabled ?? false);
+        setStoryReplyTriggerEnabled(c.storyReplyTriggerEnabled ?? false);
         setPublicReplyEnabled(c.publicReplyEnabled);
         setPublicReplyMessages(
           c.publicReplyMessages?.length
@@ -409,6 +418,8 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       matchAnyWord: matchMode === "any",
       keywords: matchMode === "any" ? [] : keywords,
       dmTriggerEnabled,
+      storyReplyTriggerEnabled:
+        triggerScope === "storyOnly" ? true : storyReplyTriggerEnabled,
       dmMessage,
       openingDmEnabled,
       openingDmMessage: openingDmEnabled ? openingDmMessage : null,
@@ -697,9 +708,21 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           >
             {t("next post or reel")}
           </Radio>
+          <Radio
+            checked={triggerScope === "storyOnly"}
+            onSelect={() => setTriggerScope("storyOnly")}
+          >
+            {t("only when someone replies to a story")}
+          </Radio>
         </Section>
 
-        <Section title={t("And this comment has")}>
+        <Section
+          title={
+            triggerScope === "storyOnly"
+              ? t("And this story reply has")
+              : t("And this comment has")
+          }
+        >
           <Radio
             checked={matchMode === "specific"}
             onSelect={() => setMatchMode("specific")}
@@ -739,6 +762,29 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                 ? t("Every DM to this account gets the reply below — use with care.")
                 : t("A DM containing any of these words gets the same reply, no comment needed.")}
             </p>
+          )}
+          {triggerScope !== "storyOnly" && (
+            <>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+                <span className="text-sm text-foreground">
+                  {t("also reply when someone replies to a story")}{" "}
+                  {matchMode === "any" ? t("anything") : t("with these words")}
+                </span>
+                <Toggle
+                  on={storyReplyTriggerEnabled}
+                  onToggle={() =>
+                    setStoryReplyTriggerEnabled(!storyReplyTriggerEnabled)
+                  }
+                />
+              </div>
+              {storyReplyTriggerEnabled && (
+                <p className="text-xs text-muted">
+                  {matchMode === "any"
+                    ? t("Every reply to any of your Stories gets the reply below — use with care.")
+                    : t("A story reply containing any of these words gets the same reply, no comment needed.")}
+                </p>
+              )}
+            </>
           )}
           <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
             <span className="text-sm text-foreground">

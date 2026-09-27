@@ -1173,6 +1173,104 @@ describe("DM Worker — DM keyword trigger", () => {
   });
 });
 
+describe("DM Worker — story reply trigger", () => {
+  const dmTriggerAutomation = {
+    ...mockAutomation,
+    dmTriggerEnabled: true,
+    requireFollow: false,
+    followPromptMessage: null,
+    followPromptButtonLabel: null,
+  };
+  const storyTriggerAutomation = {
+    ...mockAutomation,
+    dmTriggerEnabled: false,
+    storyReplyTriggerEnabled: true,
+    requireFollow: false,
+    followPromptMessage: null,
+    followPromptButtonLabel: null,
+  };
+
+  function createMockMessageJob(data: Record<string, unknown> = {}) {
+    return {
+      name: "process-message",
+      data: {
+        instagramAccountId: "ig_456",
+        messageId: "mid_abc",
+        messageText: "can I get the LINK?",
+        senderId: "commenter_999",
+        storyId: "story_777",
+        ...data,
+      },
+      id: "message_job_001",
+      attemptsMade: 0,
+    };
+  }
+
+  it("routes a story reply to storyReplyTriggerEnabled campaigns, not dmTriggerEnabled ones", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([storyTriggerAutomation]);
+
+    const processor = getProcessor();
+    await processor(createMockMessageJob());
+
+    expect(mockPrisma.automation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          storyReplyTriggerEnabled: true,
+          isActive: true,
+        }),
+      })
+    );
+    expect(mockPrisma.automation.findMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ dmTriggerEnabled: true }),
+      })
+    );
+    expect(mockSendDirectMessage).toHaveBeenCalledWith(
+      "decrypted_token",
+      "ig_456",
+      "commenter_999",
+      "Hey commenter_user! Here is the link: https://example.com"
+    );
+  });
+
+  it("logs the reply against the story-prefixed dedup key", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([storyTriggerAutomation]);
+
+    const processor = getProcessor();
+    await processor(createMockMessageJob());
+
+    expect(mockPrisma.dmLog.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          automationId_commentId: {
+            automationId: "auto_789",
+            commentId: "story:mid_abc",
+          },
+        },
+      })
+    );
+  });
+
+  it("queries only dmTriggerEnabled (never storyReplyTriggerEnabled) for a plain DM", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([dmTriggerAutomation]);
+
+    const processor = getProcessor();
+    await processor(createMockMessageJob({ storyId: undefined }));
+
+    expect(mockPrisma.automation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ dmTriggerEnabled: true }),
+      })
+    );
+    expect(mockPrisma.automation.findMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ storyReplyTriggerEnabled: true }),
+      })
+    );
+    expect(mockSendDirectMessage).toHaveBeenCalled();
+  });
+});
+
 describe("Zernio worker routing", () => {
   it("fails open on unknown follow status and sends once through the selected provider", async () => {
     mockPrisma.zernioConnection.findUnique.mockResolvedValue({

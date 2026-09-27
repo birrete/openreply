@@ -83,6 +83,10 @@ interface WebhookEntry {
       is_deleted?: boolean;
       is_unsupported?: boolean;
       attachments?: Array<{ type?: string }>;
+      // Present when this message is a reply to one of the account's own
+      // Stories — Instagram delivers a story reply through this same
+      // `messaging` array, not a separate webhook field.
+      reply_to?: { story?: { id?: string; url?: string } };
     };
   }>;
 }
@@ -92,6 +96,9 @@ export interface WebhookMessageEvent {
   messageId: string;
   messageText: string;
   senderId: string;
+  // Set when this message is a reply to a Story, so the worker can route it
+  // to story-reply-triggered campaigns instead of plain DM-triggered ones.
+  storyId?: string;
 }
 
 export interface WebhookPostbackEvent {
@@ -198,6 +205,9 @@ export function parsePostbackEvents(
  * Parse inbound Instagram DMs out of a webhook payload. These drive the
  * keyword-triggered autoreply: a user messages the account, and a campaign
  * with `dmTriggerEnabled` whose keywords match the text replies to them.
+ * A reply to one of the account's Stories arrives through this same array —
+ * `storyId` on the returned event flags it so the worker can route it to
+ * `storyReplyTriggerEnabled` campaigns instead.
  *
  * Echoes (messages the account itself sent, including our own autoreplies),
  * deletions, and attachment-only messages with no text are dropped here so
@@ -233,6 +243,7 @@ export function parseMessageEvents(
         messageId,
         messageText: text,
         senderId,
+        storyId: message.reply_to?.story?.id,
       });
     }
   }

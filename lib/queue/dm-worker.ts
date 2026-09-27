@@ -1133,7 +1133,10 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
 }
 
 /**
- * Reply to an inbound DM whose text matches a campaign's keywords.
+ * Reply to an inbound DM whose text matches a campaign's keywords — or, when
+ * the message is a reply to one of the account's Stories (`job.data.storyId`
+ * set), a `storyReplyTriggerEnabled` campaign instead of a `dmTriggerEnabled`
+ * one.
  *
  * The user has messaged us, so the conversation is already open: this path
  * skips the opening DM (which exists to work around private-reply limits from
@@ -1141,12 +1144,19 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
  * Dedup is per inbound message id, so each message triggers at most one reply.
  */
 async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
-  const { instagramAccountId, messageId, messageText, senderId } = job.data;
+  const { instagramAccountId, messageId, messageText, senderId, storyId } =
+    job.data;
 
   const automations = await prisma.automation.findMany({
     where: {
       ...connectionScope(job.data),
-      dmTriggerEnabled: true,
+      // A story reply and a plain DM are independent triggers: a story reply
+      // only matches storyReplyTriggerEnabled campaigns, never dmTriggerEnabled
+      // ones (and vice versa), so turning on "reply to any DM" never silently
+      // starts a campaign replying to story replies too, or the reverse.
+      ...(storyId
+        ? { storyReplyTriggerEnabled: true }
+        : { dmTriggerEnabled: true }),
       isActive: true,
       instagramAccount: { instagramId: instagramAccountId },
     },
@@ -1161,7 +1171,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     orderBy: { createdAt: "asc" },
   });
 
-  const dedupeId = `dm:${messageId}`;
+  const dedupeId = storyId ? `story:${messageId}` : `dm:${messageId}`;
 
   for (const automation of automations) {
     const matchResult = automation.matchAnyWord
