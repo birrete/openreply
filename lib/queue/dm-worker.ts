@@ -283,7 +283,11 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         orderBy: TRACKED_LINK_ORDER,
       },
     },
-    orderBy: { createdAt: "asc" },
+    // A campaign built for this exact post must win the comment's one
+    // private reply over an "any post" catch-all, regardless of which was
+    // created first — otherwise an older "reply to everything" campaign
+    // permanently starves every more specific one bound to a single post.
+    orderBy: [{ matchAnyPost: "asc" }, { createdAt: "asc" }],
   });
 
   for (const automation of automations) {

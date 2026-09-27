@@ -343,7 +343,7 @@ describe("DM Worker — Full Pipeline", () => {
           orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }],
         },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ matchAnyPost: "asc" }, { createdAt: "asc" }],
     });
     expect(mockMatchKeywords).toHaveBeenCalledWith(
       "I want the LINK!",
